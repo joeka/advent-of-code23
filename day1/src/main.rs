@@ -2,6 +2,19 @@ use std::{fmt, env, process};
 use std::{path::Path, fs::File, io};
 use std::io::BufRead;
 
+static RADIX: u32 = 10;
+static NUMBERS: &'static [&'static str] = &[
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine"
+];
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
@@ -36,20 +49,60 @@ fn read_lines(path: &Path) -> io::Result<io::Lines<io::BufReader<File>>> {
 }
 
 fn extract_number(line: String) -> u32 {
-    const RADIX: u32 = 10;
-    let mut digits = line.chars()
-        .filter(|c| c.is_digit(RADIX));
-    let mut last = digits.next()
-        .expect("there should be at least one digit")
-        .to_digit(RADIX)
-        .expect("digits should be converted to u32");
-    let first = 10 * last;
+    let first = find_first(&line);
+    let last: Option<u32> = find_second(&line[first.1+1..]);
+    return first.0 * 10 + last.unwrap_or(first.0);
+}
 
-    for c in digits {
-        last = c.to_digit(RADIX).expect("digits should be converted to u32");
+fn find_first(line: &str) -> (u32, usize){
+    for (i, c) in line.chars().enumerate() {
+        if c.is_digit(RADIX) {
+            return (c.to_digit(RADIX).unwrap(), i);
+        }
+        for length in 3..6 {
+            let end = i + 1;
+            if end >= length {
+                let value = check_substring(&line, end, length);
+                if value.is_some() {
+                    return (value.unwrap(), i);
+                }
+            } else {
+                break;
+            }
+        }
     }
+    panic!("Couldn't find first number!")
+}
 
-    return first + last;
+fn find_second(line: &str) -> Option<u32> {
+    let mut last: Option<u32> = None;
+    for (i, c) in line.chars().enumerate() {
+        if c.is_digit(RADIX) {
+            last = c.to_digit(RADIX);
+            continue;
+        }
+        for length in 3..6 {
+            let end = i + 1;
+            if end >= length {
+                let value =  check_substring(&line, end, length);
+                if value.is_some() {
+                    last = value;
+                    break;
+                }
+            }
+        }
+    }
+    return last;
+}
+
+fn check_substring(line: &str, end: usize, length: usize) -> Option<u32> {
+    let substring = &line[(end - length)..end];
+    let pos = NUMBERS.iter()
+        .position(|number| number == &substring);
+    match pos {
+        Some(pos) => Some((pos + 1) as u32),
+        None => None
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -64,6 +117,12 @@ impl fmt::Display for CalibrationError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_sum_of_calibration_values2() {
+        let result = sum_of_calibration_values(Path::new("./tests/input2.txt"));
+        assert_eq!(result.unwrap(), 281);
+    }
 
     #[test]
     fn test_extract_number2() {
