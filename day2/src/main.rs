@@ -34,24 +34,31 @@ impl Game {
 
 fn main() {
     let args: Vec<String> = env::args().collect();
+    let input_path = Path::new(&args[1]);
+    if !input_path.exists() {
+        eprintln!("Input file does not exist: {}", input_path.display());
+        exit_with_usage();
+    }
+
     let result = match args.len() {
-        2 => part2(&args),
-        5 => part1(&args),
-        _ => Err(GameError)
+        2 => part2(input_path),
+        5 => part1(input_path, &args),
+        _ => Err(GameError::from("Invalid number of arguments"))
     };
     match result {
         Ok(sum) => println!("{sum}"),
-        Err(_) => {
+        Err(error) => {
+            eprintln!("{}", error);
             exit_with_usage();
         }
     }
 }
 
-fn part2(args: &Vec<String>) -> Result<u32, GameError> {
-    sum_of_minimum_power(Path::new(&args[1]))
+fn part2(input_file: &Path) -> Result<u32, GameError> {
+    sum_of_minimum_power(input_file)
 }
 
-fn part1(args: &Vec<String>)  -> Result<u32, GameError> {
+fn part1(input_file: &Path, args: &Vec<String>)  -> Result<u32, GameError> {
     let mut bag = Cubes { red: 0, green: 0, blue: 0};
     match args[2].parse::<u32>() {
         Ok(red) => bag.red = red,
@@ -65,12 +72,12 @@ fn part1(args: &Vec<String>)  -> Result<u32, GameError> {
         Ok(blue) => bag.blue = blue,
         Err(_) => exit_with_usage()
     };
-    sum_of_possible_games(Path::new(&args[1]), &bag)
+    sum_of_possible_games(input_file, &bag)
 }
 
 fn exit_with_usage() {
     println!("Usage: day2 INPUT_FILE RED GREEN BLUE");
-    println!("art2: day2 INPUT_FILE");
+    println!("Part2: day2 INPUT_FILE");
     process::exit(1);
 }
 
@@ -80,7 +87,7 @@ fn sum_of_minimum_power(input_file: &Path) -> Result<u32, GameError> {
         for line in lines {
             let line = match line {
                 Ok(line) => line,
-                Err(_) => return Err(GameError),
+                Err(_) => return Err(GameError::from("Could not read the input file!")),
             };
             let game = match parse_game(&line) {
                 Ok(game) => game,
@@ -98,7 +105,7 @@ fn sum_of_possible_games(input_file: &Path, bag: &Cubes) -> Result<u32, GameErro
         for line in lines {
             let line = match line {
                 Ok(line) => line,
-                Err(_) => return Err(GameError),
+                Err(_) => return Err(GameError::from("Could not read the input file!")),
             };
             let game = match parse_game(&line) {
                 Ok(game) => game,
@@ -125,7 +132,7 @@ fn parse_game(line: &str) -> Result<Game, GameError> {
     let parts: Vec<&str> = line.split(':').collect();
     let game_id_part = match parts[0].split(' ').last() {
         Some(part) => part,
-        None => return Err(GameError),
+        None => return Err(GameError::new(format!("Could not parse: {line}"))),
     };
     let game_id = match parse_game_id(game_id_part) {
         Ok(id) => id,
@@ -146,29 +153,30 @@ fn parse_draw(part: &str) -> Result<Cubes, GameError> {
         green: 0,
         blue: 0,
     };
-    part.split(',').map(str::trim).for_each(|s| {
-        let parts: Vec<&str> = s.split(' ').collect();
-        let value = parts[0]
-            .parse::<u32>()
-            .expect("value should represent a number");
+    for cube_part in part.split(',').map(str::trim) {
+        let parts: Vec<&str> = cube_part.split(' ').collect();
+        let value = match parts[0].parse::<u32>() {
+            Ok(value) => value,
+            Err(_) => return Err(GameError::new(format!("'{}' is not a number.", parts[0])))
+        };
         match parts[1] {
             "red" => draw.red = value,
             "green" => draw.green = value,
             "blue" => draw.blue = value,
-            _ => panic!("invalid value"),
+            _ => return Err(GameError::new(format!("'{}' is not a valid cube color.", parts[1])))
         }
-    });
+    }
     Ok(draw)
 }
 
 fn parse_game_id(part: &str) -> Result<u32, GameError> {
     let id_part = match part.split(' ').last() {
         Some(part) => part,
-        None => return Err(GameError),
+        None => return Err(GameError::new(format!("Can't parse game id from '{part}'"))),
     };
     match id_part.parse::<u32>() {
         Ok(number) => Ok(number),
-        Err(_) => Err(GameError),
+        Err(_) => Err(GameError::new(format!("Can't parse game id: '{id_part}' is not a number."))),
     }
 }
 
@@ -177,12 +185,26 @@ fn read_lines(path: &Path) -> io::Result<io::Lines<io::BufReader<File>>> {
     Ok(io::BufReader::new(file).lines())
 }
 
-#[derive(Debug, Clone)]
-struct GameError;
+#[derive(Debug)]
+struct GameError {
+    message: String
+}
+
+impl GameError {
+    fn new(message: String) -> Self {
+        Self { message: message }
+    }
+}
+
+impl From<&str> for GameError {
+    fn from(message: &str) -> Self {
+        Self::new(String::from(message))
+    }
+}
 
 impl fmt::Display for GameError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "couldn't solve the game")
+        write!(f, "{}", self.message)
     }
 }
 
