@@ -1,5 +1,6 @@
 use std::cmp::max;
 use std::io::BufRead;
+use std::str::FromStr;
 use std::{env, fmt, fs::File, io, path::Path, process};
 
 #[derive(Debug)]
@@ -12,6 +13,33 @@ struct Cubes {
 impl Cubes {
     fn power(&self) -> u32 {
         self.red * self.green * self.blue
+    }
+}
+
+impl FromStr for Cubes {
+    type Err = GameError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut cubes = Cubes {
+            red: 0,
+            green: 0,
+            blue: 0,
+        };
+        for cube_part in s.split(',').map(str::trim) {
+            let (number, color) = cube_part.split_once(' ')
+                .ok_or(GameError::new(format!("Can't parse '{s}' into Cubes.")))?;
+            let value = match number.parse::<u32>() {
+                Ok(value) => value,
+                Err(_) => return Err(GameError::new(format!("'{}' is not a number.", number)))
+            };
+            match color {
+                "red" => cubes.red = value,
+                "green" => cubes.green = value,
+                "blue" => cubes.blue = value,
+                _ => return Err(GameError::new(format!("'{}' is not a valid cube color.", color)))
+            }
+        }
+        Ok(cubes)
     }
 }
 
@@ -29,6 +57,32 @@ impl Game {
             required.blue = max(required.blue, draw.blue);
         }
         required
+    }
+
+    fn possible(&self, bag: &Cubes) -> bool {
+        for draw in &self.draws {
+            if draw.red > bag.red || draw.green > bag.green || draw.blue > bag.blue {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+impl FromStr for Game {
+    type Err = GameError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (game_id_part, draws_part) = s.split_once(':')
+            .ok_or(GameError::new(format!("Could not parse: {s}")))?;
+        let game_id = parse_game_id(game_id_part)?;
+        let draws: Result<Vec<Cubes>, GameError> = draws_part.split(';')
+            .map(Cubes::from_str)
+            .collect();
+        match draws {
+            Ok(draws) => Ok(Game { id: game_id, draws }),
+            Err(error) => Err(error),
+        }
     }
 }
 
@@ -85,14 +139,7 @@ fn sum_of_minimum_power(input_file: &Path) -> Result<u32, GameError> {
     let mut sum: u32 = 0;
     if let Ok(lines) = read_lines(input_file) {
         for line in lines {
-            let line = match line {
-                Ok(line) => line,
-                Err(_) => return Err(GameError::from("Could not read the input file!")),
-            };
-            let game = match parse_game(&line) {
-                Ok(game) => game,
-                Err(error) => return Err(error),
-            };
+            let game = game_from_line(line)?;
             sum += game.required().power();
         }
     }
@@ -103,15 +150,8 @@ fn sum_of_possible_games(input_file: &Path, bag: &Cubes) -> Result<u32, GameErro
     let mut sum: u32 = 0;
     if let Ok(lines) = read_lines(input_file) {
         for line in lines {
-            let line = match line {
-                Ok(line) => line,
-                Err(_) => return Err(GameError::from("Could not read the input file!")),
-            };
-            let game = match parse_game(&line) {
-                Ok(game) => game,
-                Err(error) => return Err(error),
-            };
-            if game_possible(&game, &bag) {
+            let game = game_from_line(line)?;
+            if game.possible(&bag) {
                 sum += game.id;
             }
         }
@@ -119,59 +159,17 @@ fn sum_of_possible_games(input_file: &Path, bag: &Cubes) -> Result<u32, GameErro
     Ok(sum)
 }
 
-fn game_possible(game: &Game, bag: &Cubes) -> bool {
-    for draw in &game.draws {
-        if draw.red > bag.red || draw.green > bag.green || draw.blue > bag.blue {
-            return false;
-        }
-    }
-    true
-}
-
-fn parse_game(line: &str) -> Result<Game, GameError> {
-    let parts: Vec<&str> = line.split(':').collect();
-    let game_id_part = match parts[0].split(' ').last() {
-        Some(part) => part,
-        None => return Err(GameError::new(format!("Could not parse: {line}"))),
+fn game_from_line(line: Result<String, io::Error>) -> Result<Game, GameError> {
+    let line = match line {
+        Ok(line) => line,
+        Err(_) => return Err(GameError::from("Could not read the input file!")),
     };
-    let game_id = match parse_game_id(game_id_part) {
-        Ok(id) => id,
-        Err(error) => return Err(error),
-    };
-    let draws: Result<Vec<Cubes>, GameError> = parts[1].split(';')
-        .map(parse_draw)
-        .collect();
-    match draws {
-        Ok(draws) => Ok(Game { id: game_id, draws }),
-        Err(error) => Err(error),
-    }
-}
-
-fn parse_draw(part: &str) -> Result<Cubes, GameError> {
-    let mut draw = Cubes {
-        red: 0,
-        green: 0,
-        blue: 0,
-    };
-    for cube_part in part.split(',').map(str::trim) {
-        let parts: Vec<&str> = cube_part.split(' ').collect();
-        let value = match parts[0].parse::<u32>() {
-            Ok(value) => value,
-            Err(_) => return Err(GameError::new(format!("'{}' is not a number.", parts[0])))
-        };
-        match parts[1] {
-            "red" => draw.red = value,
-            "green" => draw.green = value,
-            "blue" => draw.blue = value,
-            _ => return Err(GameError::new(format!("'{}' is not a valid cube color.", parts[1])))
-        }
-    }
-    Ok(draw)
+    Game::from_str(&line)
 }
 
 fn parse_game_id(part: &str) -> Result<u32, GameError> {
-    let id_part = match part.split(' ').last() {
-        Some(part) => part,
+    let id_part = match part.split_once(' ') {
+        Some(part) => part.1,
         None => return Err(GameError::new(format!("Can't parse game id from '{part}'"))),
     };
     match id_part.parse::<u32>() {
@@ -240,24 +238,24 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_draw() {
-        let draw = parse_draw("8 green, 6 blue, 20 red").unwrap();
-        assert_eq!(draw.red, 20);
-        assert_eq!(draw.green, 8);
-        assert_eq!(draw.blue, 6);
+    fn test_cubes_from_str() {
+        let cubes = Cubes::from_str("8 green, 6 blue, 20 red").unwrap();
+        assert_eq!(cubes.red, 20);
+        assert_eq!(cubes.green, 8);
+        assert_eq!(cubes.blue, 6);
     }
 
     #[test]
-    fn test_parse_draw_with_zero() {
-        let draw = parse_draw("8 green, 6 blue").unwrap();
+    fn test_cubes_from_str_with_zero() {
+        let draw = Cubes::from_str("8 green, 6 blue").unwrap();
         assert_eq!(draw.red, 0);
         assert_eq!(draw.green, 8);
         assert_eq!(draw.blue, 6);
     }
 
     #[test]
-    fn test_parse_game() {
-        let game = parse_game("Game 5: 1 red, 2 blue, 3 green; 2 blue, 2 green").unwrap();
+    fn test_game_from_str() {
+        let game = Game::from_str("Game 5: 1 red, 2 blue, 3 green; 2 blue, 2 green").unwrap();
         assert_eq!(game.id, 5);
         assert_eq!(game.draws.len(), 2);
         assert_eq!(game.draws[0], Cubes { red: 1, green: 3, blue: 2});
@@ -271,8 +269,8 @@ mod tests {
             Cubes {red: 2, green: 3, blue: 4}
         ]};
 
-        assert!(game_possible(&game, &Cubes { red: 5, green: 5, blue: 5}));
-        assert!(!game_possible(&game, &Cubes { red: 3, green: 3, blue: 3}));
+        assert!(game.possible(&Cubes { red: 5, green: 5, blue: 5}));
+        assert!(!game.possible(&Cubes { red: 3, green: 3, blue: 3}));
     }
 
     #[test]
