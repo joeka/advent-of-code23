@@ -1,3 +1,4 @@
+use std::cmp::max;
 use std::io::BufRead;
 use std::{env, fmt, fs::File, io, path::Path, process};
 
@@ -8,17 +9,49 @@ struct Cubes {
     blue: u32,
 }
 
+impl Cubes {
+    fn power(&self) -> u32 {
+        self.red * self.green * self.blue
+    }
+}
+
 struct Game {
     id: u32,
     draws: Vec<Cubes>,
 }
 
+impl Game {
+    fn required(&self) -> Cubes {
+        let mut required = Cubes { red: 0, green: 0, blue: 0 };
+        for draw in &self.draws {
+            required.red = max(required.red, draw.red);
+            required.green = max(required.green, draw.green);
+            required.blue = max(required.blue, draw.blue);
+        }
+        required
+    }
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
-    if args.len() != 5 {
-        println!("Usage: {} INPUT_FILE RED GREEN BLUE", args[0]);
-        process::exit(1);
+    let result = match args.len() {
+        2 => part2(&args),
+        5 => part1(&args),
+        _ => Err(GameError)
+    };
+    match result {
+        Ok(sum) => println!("{sum}"),
+        Err(_) => {
+            exit_with_usage();
+        }
     }
+}
+
+fn part2(args: &Vec<String>) -> Result<u32, GameError> {
+    sum_of_minimum_power(Path::new(&args[1]))
+}
+
+fn part1(args: &Vec<String>)  -> Result<u32, GameError> {
     let mut bag = Cubes { red: 0, green: 0, blue: 0};
     match args[2].parse::<u32>() {
         Ok(red) => bag.red = red,
@@ -32,18 +65,31 @@ fn main() {
         Ok(blue) => bag.blue = blue,
         Err(_) => exit_with_usage()
     };
-
-    match sum_of_possible_games(Path::new(&args[1]), &bag) {
-        Ok(sum) => println!("{sum}"),
-        Err(_) => {
-            exit_with_usage();
-        }
-    }
+    sum_of_possible_games(Path::new(&args[1]), &bag)
 }
 
 fn exit_with_usage() {
     println!("Usage: day2 INPUT_FILE RED GREEN BLUE");
+    println!("art2: day2 INPUT_FILE");
     process::exit(1);
+}
+
+fn sum_of_minimum_power(input_file: &Path) -> Result<u32, GameError> {
+    let mut sum: u32 = 0;
+    if let Ok(lines) = read_lines(input_file) {
+        for line in lines {
+            let line = match line {
+                Ok(line) => line,
+                Err(_) => return Err(GameError),
+            };
+            let game = match parse_game(&line) {
+                Ok(game) => game,
+                Err(error) => return Err(error),
+            };
+            sum += game.required().power();
+        }
+    }
+    Ok(sum)
 }
 
 fn sum_of_possible_games(input_file: &Path, bag: &Cubes) -> Result<u32, GameError> {
@@ -143,6 +189,27 @@ impl fmt::Display for GameError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_cubes_power() {
+        let cubes = Cubes { red: 2, green: 3, blue: 4 };
+        assert_eq!(cubes.power(), 24);
+    }
+
+    #[test]
+    fn test_game_required() {
+        let game = Game { id: 1, draws: vec![
+            Cubes { red: 1, green: 5, blue: 4 },
+            Cubes { red: 2, green: 3, blue: 4 }
+        ]};
+        assert_eq!(game.required(), Cubes { red: 2, green: 5, blue: 4 });
+    }
+
+    #[test]
+    fn test_sum_of_minimum_power() {
+        let sum = sum_of_minimum_power(Path::new("tests/input.txt")).unwrap();
+        assert_eq!(sum, 2286);
+    }
 
     #[test]
     fn test_parse_game_id() {
