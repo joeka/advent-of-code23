@@ -1,38 +1,8 @@
-use std::cmp::min;
+use std::collections::VecDeque;
 use std::io::BufRead;
 use std::{env, fmt, fs::File, io, path::Path, process};
 
 static RADIX: u32 = 10;
-
-struct SchematicSymbol {
-    symbol: Option<char>,
-    number: Option<u32>,
-    is_part: bool,
-    counted: bool
-}
-
-impl SchematicSymbol {
-    fn new() -> Self {
-        Self { symbol: None, number: None, is_part: false, counted: false }
-    }
-}
-
-impl From<char> for SchematicSymbol {
-    fn from(symbol: char) -> Self {
-        match symbol {
-            '.' => Self::new(),
-            symbol if symbol.is_digit(RADIX) => Self { 
-                symbol: None, number: symbol.to_digit(RADIX), is_part: false, counted: false },
-            _ => Self { symbol: Some(symbol), number: None, is_part: false, counted: false }
-        }
-    }
-}
-
-impl From<u32> for SchematicSymbol {
-    fn from(number: u32) -> Self {
-        Self { symbol: None, number: Some(number), is_part: false, counted: false }
-    }
-}
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -55,90 +25,120 @@ fn main() {
     }
 }
 
-fn sum_of_parts(input_file: &Path) -> Result<u32, SchematicError> {
-    let mut sum: u32 = 0;
+fn sum_of_parts(input_file: &Path) -> Result<u64, SchematicError> {
+    let mut sum: u64 = 0;
 
-    let mut empty_symbol: SchematicSymbol = SchematicSymbol::new();
-    let mut predecessor_symbols: Vec<SchematicSymbol> = Vec::new();
-    let mut predecessor_line:Vec<&SchematicSymbol> = Vec::new();
-    let mut current_symbols: Vec<SchematicSymbol> = Vec::new();
-    let mut current_line: Vec<&SchematicSymbol> = Vec::new();
-    if let Ok(lines) = read_lines(input_file) {
+    if let Ok(mut lines) = read_lines(input_file) {
+        let mut window: VecDeque<Vec<char>> = VecDeque::with_capacity(3);
+        let line = match lines.next() {
+            None => return Err(SchematicError::from("Could not read line.")),
+            Some(line) => match line {
+                Ok(line) => line,
+                Err(_) => return Err(SchematicError::from("Could not read line."))
+            }
+        };
+        window.push_back(line.chars().collect());
         for line in lines {
             let line = match line {
                 Ok(line) => line,
                 Err(_) => return Err(SchematicError::from("Could not read line."))
             };
-
-            let mut predecessor_symbol: &mut SchematicSymbol = &mut empty_symbol;
-            for (i, c) in line.chars().enumerate() {
-                if c == '.' {
-                    current_symbols.push(SchematicSymbol::new());
-                    predecessor_symbol = current_symbols.last_mut().unwrap();
-                    current_line.push(predecessor_symbol);
-                } else if c.is_digit(RADIX) {
-                    let new_digit = c.to_digit(RADIX)
-                            .ok_or(SchematicError::from("Could not read digit."))?;
-                    if let Some(number) = predecessor_symbol.number {
-                        predecessor_symbol.number = Some(number * 10 + new_digit);
-                    } else {
-                        let mut new_symbol = SchematicSymbol::from(new_digit);
-                        if predecessor_symbol.symbol.is_some() {
-                            new_symbol.is_part = true;
-                        }
-
-                        current_symbols.push(new_symbol);
-                        predecessor_symbol = current_symbols.last_mut().unwrap();
-                    }
-                    let left = if i == 0 {0} else {i - 1};
-                    for j in left..min(predecessor_symbols.len(), i+1) {
-                        if let Some(symbol) = predecessor_symbols.get(j) {
-                            if symbol.symbol.is_some() {
-                                predecessor_symbol.is_part = true;
-                            }
-                        }
-                    }
-                } else {
-                    let new_symbol = SchematicSymbol::from(c);
-                    if predecessor_symbol.number.is_some() {
-                        predecessor_symbol.is_part = true;
-                    }
-                    let left = if i == 0 {0} else {i - 1};
-                    for j in left..min(predecessor_symbols.len(), i+1) {
-                        if let Some(symbol) = predecessor_symbols.get_mut(j) {
-                            if symbol.number.is_some() {
-                                symbol.is_part = true;
-                            }
-                        }
-                    }
-
-                    current_symbols.push(new_symbol);
-                    predecessor_symbol = current_symbols.last_mut().unwrap();
-                }
-            }
-
-            for symbol in predecessor_symbols.iter_mut() {
-                if symbol.is_part && !symbol.counted {
-                    if let Some(number) = symbol.number {
-                        sum += number;
-                        symbol.counted = true;
-                    }
-                }
-            }
-            predecessor_symbols = current_symbols;
-            current_symbols = Vec::new();
+            window.push_back(line.chars().collect());
+            sum += parse_line(&window)?;
         }
-    }
-    for symbol in predecessor_symbols.iter_mut() {
-        if symbol.is_part && !symbol.counted {
-            if let Some(number) = symbol.number {
-                sum += number;
-                symbol.counted = true;
-            }
-        }
+        let tmp = window.pop_front()
+            .ok_or(SchematicError::from("Could not parse last line."))?;
+        window.push_back(tmp);
+        sum += parse_line(&window)?;
     }
 
     Ok(sum)
+}
+
+#[derive(PartialEq, Eq)]
+enum ParseState {
+    Searching,
+    Symbol,
+    Number,
+    PartNumber
+}
+
+fn parse_line(window: &VecDeque<Vec<char>>) -> Result<u64, SchematicError> {
+    let mut current_sum: u64 = 0;
+    let mut current_number: u64 = 0;
+    let mut start: usize = 0;
+
+    let mut state = ParseState::Searching;
+
+    let center = window.len() - 2;
+
+    let current_line = &window[center];
+    let line_len = current_line.len();
+    for (i, c) in current_line.iter().enumerate() {
+        if c == &'.' {
+            match state {
+                ParseState::PartNumber => {
+                    current_sum += current_number;
+                    current_number = 0;
+                },
+                ParseState::Number => {
+                    let left = if start > 0 {start - 1} else {0};
+                    let right = if i + 1 < line_len {i + 1} else {line_len};
+                    if symbol_in_range(&window[center + 1], left, right) ||
+                            (center > 0 && symbol_in_range(&window[center - 1], left, right)) {
+                        current_sum += current_number;
+                    }
+                    current_number = 0;
+                },
+                _ => ()
+            }
+            state = ParseState::Searching;
+            
+        } else if c.is_digit(RADIX) {
+            let new_digit = c.to_digit(RADIX)
+                    .ok_or(SchematicError::from("Could not read digit."))? as u64;
+            current_number = current_number * 10 + new_digit;
+            
+            if state == ParseState::Searching || state == ParseState::Symbol {
+                start = i;
+            }
+            state = match state {
+                ParseState::Symbol => ParseState::PartNumber,
+                ParseState::PartNumber => ParseState::PartNumber,
+                _ => ParseState::Number
+            };
+        } else {
+            if state == ParseState::Number || state == ParseState::PartNumber {
+                current_sum += current_number;
+                current_number = 0;
+            }
+            state = ParseState::Symbol;
+        }
+    }
+    match state {
+        ParseState::PartNumber => {
+            current_sum += current_number;
+        },
+        ParseState::Number => {
+            let left = if start > 0 {start - 1} else {0};
+            if symbol_in_range(&window[center + 1], left, line_len) ||
+                    (center > 0 && symbol_in_range(&window[center - 1], left, line_len)) {
+                current_sum += current_number;
+            }
+        },
+        _ => ()
+    }
+    Ok(current_sum)
+}
+
+fn symbol_in_range(line: &Vec<char>, start: usize, end: usize) -> bool {
+    for c in &line[start..end] {
+        match c {
+            '0'..='9' | '.' => (),
+            _ => return true
+        }
+    }
+    false
 }
 
 fn exit_with_usage() {
@@ -181,5 +181,71 @@ mod tests {
     fn test_sum_of_parts() {
         let sum = sum_of_parts(Path::new("tests/input.txt")).unwrap();
         assert_eq!(sum, 4361);
+    }
+
+    #[test]
+    fn test_sum_of_parts3() {
+        let sum = sum_of_parts(Path::new("tests/input3.txt")).unwrap();
+        assert_eq!(sum, 333);
+    }
+
+    #[test]
+    fn test_sum_of_parts2() {
+        let sum = sum_of_parts(Path::new("tests/input2.txt")).unwrap();
+        assert_eq!(sum, 3306);
+    }
+
+    #[test]
+    fn test_parse_line() {
+        let mut window: VecDeque<Vec<char>> = VecDeque::with_capacity(3);
+        window.push_back(".*...".chars().collect());
+        window.push_back(".12.3".chars().collect());
+        window.push_back(".....".chars().collect());
+
+        assert_eq!(parse_line(&window).unwrap(), 12);
+    }
+
+    #[test]
+    fn test_parse_start_line() {
+        let mut window: VecDeque<Vec<char>> = VecDeque::with_capacity(3);
+        window.push_back(".52.3".chars().collect());
+        window.push_back("#....".chars().collect());
+
+        assert_eq!(parse_line(&window).unwrap(), 52);
+    }
+
+    #[test]
+    fn test_parse_example_lines() {
+        let mut window: VecDeque<Vec<char>> = VecDeque::with_capacity(3);
+        window.push_back("467..114..".chars().collect());
+        window.push_back("...*......".chars().collect());
+        assert_eq!(parse_line(&window).unwrap(), 467);
+
+        window.push_back("..35..633.".chars().collect());
+        window.push_back("......#...".chars().collect());
+        assert_eq!(parse_line(&window).unwrap(), 668);
+
+        window.push_back("617*......".chars().collect());
+        window.push_back(".....+.58.".chars().collect());
+        assert_eq!(parse_line(&window).unwrap(), 617);
+
+        window.push_back("..592.....".chars().collect());
+        assert_eq!(parse_line(&window).unwrap(), 0);
+
+        window.push_back("......755.".chars().collect());
+        assert_eq!(parse_line(&window).unwrap(), 592);
+
+        window.push_back("...$.*....".chars().collect());
+        assert_eq!(parse_line(&window).unwrap(), 755);
+
+        window.push_back(".664.598..".chars().collect());
+        window.push_back("..........".chars().collect());
+        assert_eq!(parse_line(&window).unwrap(), 1262);
+    }
+
+    #[test]
+    fn test_symbol_in_range() {
+        assert!(symbol_in_range(&"..12.#.".chars().collect(), 4, 6));
+        assert!(!symbol_in_range(&"..12.#.".chars().collect(), 0, 4));
     }
 }
