@@ -25,48 +25,10 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'day1'",
-            "cargo": {
-                "args": [
-                    "test",
-                    "--no-run",
-                    "--bin=day1",
-                    "--package=day1"
-                ],
-                "filter": {
-                    "name": "day1",
-                    "kind": "bin"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
             "name": "Debug executable 'day2'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=day2",
-                    "--package=day2"
-                ],
-                "filter": {
-                    "name": "day2",
-                    "kind": "bin"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug unit tests in executable 'day2'",
-            "cargo": {
-                "args": [
-                    "test",
-                    "--no-run",
                     "--bin=day2",
                     "--package=day2"
                 ],
@@ -102,20 +64,42 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'day3'",
+            "name": "Debug executable 'day4'",
             "cargo": {
                 "args": [
-                    "test",
-                    "--no-run",
-                    "--bin=day3",
-                    "--package=day3"
+                    "build",
+                    "--bin=day4",
+                    "--package=day4"
                 ],
                 "filter": {
-                    "name": "day3",
+                    "name": "day4",
                     "kind": "bin"
                 }
             },
-            "args": [],
+            "args": [
+                "input/day04.txt",
+                "part2"
+            ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'day5'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=day5",
+                    "--package=day5"
+                ],
+                "filter": {
+                    "name": "day5",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "input/day05.txt"
+            ],
             "cwd": "${workspaceFolder}"
         }
     ]
