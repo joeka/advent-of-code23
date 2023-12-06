@@ -98,7 +98,8 @@
                 }
             },
             "args": [
-                "input/day05.txt"
+                "input/day05.txt",
+                "part2"
             ],
             "cwd": "${workspaceFolder}"
         }
