@@ -21,14 +21,21 @@ fn main() {
     };
 }
 
+
+// v * (t -v) = d
+// v^2 - tv + d = 0
+// v = (t +- sqrt(t^2 - 4d)) / 2
 fn race(time: u64, distance: u64) -> u64 {
-    let mut possibilities = 0;
-    for v in 1..time {
-        if v * (time - v) > distance {
-            possibilities += 1;
-        }
-    }
-    possibilities
+    let t = time as f64;
+    let d = distance as f64;
+
+    let a = t / 2.0;
+    let b = (t.powi(2) - 4.0 * d).sqrt() / 2.0;
+
+    let lower = (a - b + 1.0).floor() as u64;
+    let upper = (a + b - 1.0).ceil() as u64;
+
+    upper - lower + 1
 }
 
 fn part1(input_path: &Path) -> u64 {
