@@ -29,9 +29,27 @@ fn main() {
 }
 
 type Coordinate = (usize, usize);
-type Node = (Coordinate, Coordinate);
+type Node = (Coordinate, Coordinate, char);
+
+
+fn part2(input_file: &Path) -> Result<u64, NavigationError> {
+    let (
+        start,
+        start_node,
+        grid) = parse_grid(input_file);
+    Ok(calculate_area_in_loop((start.0, start.1, start_node.2), &start_node.0, &grid))
+}
 
 fn part1(input_file: &Path) -> Result<u64, NavigationError> {
+    let (
+        start,
+        start_node,
+        grid) = parse_grid(input_file);
+    let count = count_loop(&start, &start_node.0, &grid);
+    Ok(count / 2)
+}
+
+fn parse_grid(input_file: &Path) -> (Coordinate, Node, Vec<Vec<Option<Node>>>) {
     let mut start: Coordinate = (0, 0);
     let mut grid: Vec<Vec<Option<Node>>> = Vec::new();
 
@@ -48,10 +66,98 @@ fn part1(input_file: &Path) -> Result<u64, NavigationError> {
             grid.push(current_line);
         }
     }
+    let starting_directions = find_starting_directions(&grid, &start);
+    let start_node = define_start_node(&start, starting_directions);
+    
+    (start, start_node, grid)
+}
 
-    let start_node = find_starting_directions(&grid, &start);
-    let count = count_loop(&start, &start_node.0, &grid);
-    Ok(count / 2)
+type PathNode = (usize, usize, char);
+enum State {
+    Outside,
+    Inside,
+    WallTop,
+    WallBottom
+}
+fn calculate_area_in_loop(start: PathNode, next: &Coordinate, grid: &Vec<Vec<Option<Node>>>) -> u64 {
+    let mut path: Vec<(usize, usize, char)> = vec![start];
+    let mut prev = start;
+    let mut current = next;
+    while let Some(node) = &grid[current.1][current.0] {
+        path.push((current.0, current.1, node.2));
+        let tmp = (current.0, current.1, node.2);
+        current = if node.0 == (prev.0, prev.1) {&node.1} else {&node.0};
+        prev = tmp;
+    }
+
+    path.sort_by_key(|coordinate| (coordinate.1, coordinate.0));
+
+    let mut state = State::Outside;
+    let mut count: usize = 0;
+    let mut current_row: usize = 0;
+    let mut left: usize = 0;
+
+    for (x, y, c) in path {
+        if current_row != y {
+            current_row = y;
+            state = match c {
+                '|' => {
+                    left = x;
+                    State::Inside
+                },
+                'L' => State::WallBottom,
+                'F' => State::WallTop,
+                _ => panic!("Couldn't parse path in graph")
+            };
+            continue
+        }
+
+        match state {
+            State::Outside => {
+                state = match c {
+                    '|' => {
+                        left = x;
+                        State::Inside
+                    },
+                    'L' => State::WallBottom,
+                    'F' => State::WallTop,
+                    _ => panic!("Couldn't parse path in graph")
+                };
+            },
+            State::Inside => {
+                count += x - left - 1;
+                state = match c {
+                    '|' => State::Outside,
+                    'L' => State::WallTop,
+                    'F' => State::WallBottom,
+                    _ => panic!("Couldn't parse path in graph")
+                };
+            },
+            State::WallTop => {
+                state = match c {
+                    'J' => {
+                        left = x;
+                        State::Inside
+                    },
+                    '7' => State::Outside,
+                    '-' => state,
+                    _ => panic!("Couldn't parse path in graph")
+                }
+            },
+            State::WallBottom => {
+                state = match c {
+                    'J' => State::Outside,
+                    '7' => {
+                        left = x;
+                        State::Inside
+                    },
+                    '-' => state,
+                    _ => panic!("Couldn't parse path in graph")
+                }
+            }
+        }
+    }
+    count as u64
 }
 
 fn count_loop(start: &Coordinate, next: &Coordinate, grid: &Vec<Vec<Option<Node>>>) -> u64 {
@@ -68,7 +174,30 @@ fn count_loop(start: &Coordinate, next: &Coordinate, grid: &Vec<Vec<Option<Node>
     count
 }
 
-fn find_starting_directions(grid: &Vec<Vec<Option<Node>>>, start: &Coordinate) -> Node {
+fn define_start_node(start: &Coordinate, starting_directions: (Coordinate, Coordinate)) -> Node {
+    let (x, y) = *start;
+    let start_symbol = if starting_directions.0.0 == x && x == starting_directions.1.0 {
+        '|'
+    } else if starting_directions.0.1 == y && y == starting_directions.1.1 {
+        '-'
+    } else if starting_directions.0.0 < x || starting_directions.1.0 < x {
+        if starting_directions.0.1 < y || starting_directions.1.1 < y {
+            'J'
+        } else {
+            '7'
+        }
+    } else {
+        if starting_directions.0.1 < y || starting_directions.1.1 < y {
+            'L'
+        } else {
+            'F'
+        }
+    };
+
+    (starting_directions.0, starting_directions.1, start_symbol)
+}
+
+fn find_starting_directions(grid: &Vec<Vec<Option<Node>>>, start: &Coordinate) -> (Coordinate, Coordinate) {
     let mut possible_coordinates: Vec<Coordinate> = Vec::new();
     let (x, y) = start;
 
@@ -95,20 +224,16 @@ fn find_starting_directions(grid: &Vec<Vec<Option<Node>>>, start: &Coordinate) -
 
 fn create_node(c: &char, x: usize, y: usize) -> Option<Node> {
     match c {
-        '|' => if y > 0 {Some(((x, y - 1), (x, y + 1)))} else {None}, // is a vertical pipe connecting north and south
-        '-' => if x > 0 {Some(((x - 1, y), (x + 1, y)))} else {None}, // is a horizontal pipe connecting east and west
-        'L' => if y > 0 {Some(((x, y - 1), (x + 1, y)))} else {None}, // is a 90-degree bend connecting north and east
-        'J' => if y > 0 && x > 0 {Some(((x, y - 1), (x - 1, y)))} else {None}, // is a 90-degree bend connecting north and west
-        '7' => if x > 0 {Some(((x - 1, y), (x, y + 1)))} else {None}, // is a 90-degree bend connecting south and west
-        'F' => Some(((x + 1, y), (x, y + 1))), // is a 90-degree bend connecting south and east
+        '|' => if y > 0 {Some(((x, y - 1), (x, y + 1), *c))} else {None}, // is a vertical pipe connecting north and south
+        '-' => if x > 0 {Some(((x - 1, y), (x + 1, y), *c))} else {None}, // is a horizontal pipe connecting east and west
+        'L' => if y > 0 {Some(((x, y - 1), (x + 1, y), *c))} else {None}, // is a 90-degree bend connecting north and east
+        'J' => if y > 0 && x > 0 {Some(((x, y - 1), (x - 1, y), *c))} else {None}, // is a 90-degree bend connecting north and west
+        '7' => if x > 0 {Some(((x - 1, y), (x, y + 1), *c))} else {None}, // is a 90-degree bend connecting south and west
+        'F' => Some(((x + 1, y), (x, y + 1), *c)), // is a 90-degree bend connecting south and east
         '.' => None, // is ground; there is no pipe in this tile
         'S' => None, // is the starting position of the animal
         _ => panic!("invalid character {c}")
     }
-}
-
-fn part2(_: &Path) -> Result<u64, NavigationError> {
-    Err(NavigationError::from("Not implemented"))
 }
 
 fn exit_with_usage() {
@@ -148,6 +273,18 @@ impl fmt::Display for NavigationError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_part2_1() {
+        let area = part2(Path::new("tests/part2_1.txt")).unwrap();
+        assert_eq!(area, 4);
+    }
+
+    #[test]
+    fn test_part2_2() {
+        let area = part2(Path::new("tests/part2_2.txt")).unwrap();
+        assert_eq!(area, 8);
+    }
 
     #[test]
     fn test_example1() {

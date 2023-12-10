@@ -123,6 +123,27 @@
                 "part2"
             ],
             "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'day10'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=day10",
+                    "--package=day10"
+                ],
+                "filter": {
+                    "name": "day10",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "input/day10.txt",
+                "part2"
+            ],
+            "cwd": "${workspaceFolder}"
         }
     ]
 }
