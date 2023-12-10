@@ -102,6 +102,27 @@
                 "part2"
             ],
             "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'day8'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=day8",
+                    "--package=day8"
+                ],
+                "filter": {
+                    "name": "day8",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "input/day08.txt",
+                "part2"
+            ],
+            "cwd": "${workspaceFolder}"
         }
     ]
 }
