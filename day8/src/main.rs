@@ -124,8 +124,8 @@ fn get_out(input_file: &Path) -> Result<u64, GhostError> {
 }
 
 fn exit_with_usage() {
-    println!("Usage: day7 INPUT_FILE");
-    println!("Part2: day7 INPUT_FILE part2");
+    println!("Usage: day8 INPUT_FILE");
+    println!("Part2: day8 INPUT_FILE part2");
     process::exit(1);
 }
 
