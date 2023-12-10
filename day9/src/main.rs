@@ -15,6 +15,7 @@ fn main() {
 
     let result: Result<i64, SensorError> = match args.len() {
         2 => part1(&input_path),
+        3 => part2(&input_path),
         _ => Err(SensorError::from("Invalid number of arguments."))
     };
 
@@ -33,6 +34,22 @@ fn part1(input_file: &Path) -> Result<i64, SensorError> {
         for line in lines {
             if let Ok(line) = line {
                 let values: Vec<i64> = line.split_ascii_whitespace()
+                    .map(|s| s.parse::<i64>().unwrap())
+                    .collect();
+                sum += predict_next_value(values);
+            }
+        }
+    }
+    Ok(sum)
+}
+
+fn part2(input_file: &Path) -> Result<i64, SensorError> {
+    let mut sum: i64 = 0;
+    if let Ok(lines) = read_lines(input_file) {
+        for line in lines {
+            if let Ok(line) = line {
+                let values: Vec<i64> = line.split_ascii_whitespace()
+                    .rev()
                     .map(|s| s.parse::<i64>().unwrap())
                     .collect();
                 sum += predict_next_value(values);
@@ -92,6 +109,7 @@ impl fmt::Display for SensorError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn test_example1() {
         let sum = part1(Path::new("tests/input.txt")).unwrap();
