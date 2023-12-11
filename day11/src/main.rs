@@ -8,8 +8,8 @@ fn main() {
     let options = get_args();
 
     let result: Result<usize, AOCError> = match options.part {
-        Part::One => part1(&options.input),
-        Part::Two => part2(&options.input)
+        Part::One => galaxy_distances(&options.input, 2),
+        Part::Two => galaxy_distances(&options.input, 1_000_000)
     };
 
     match result {
@@ -18,7 +18,7 @@ fn main() {
     }
 }
 
-fn part1(input_file: &PathBuf) -> Result<usize, AOCError> {
+fn galaxy_distances(input_file: &PathBuf, expanse: usize) -> Result<usize, AOCError> {
     let mut distance: usize = 0;
 
     let mut columns: Vec<Vec<Coordinate>> = Vec::new();
@@ -38,13 +38,13 @@ fn part1(input_file: &PathBuf) -> Result<usize, AOCError> {
                 }
                 x += 1;
             }
-            y += if empty_line {2} else {1};
+            y += if empty_line {expanse} else {1};
         }
     }
     let mut offset = 0;
     for column in columns.iter_mut() {
         if column.is_empty() {
-            offset += 1;
+            offset += expanse - 1;
         } else if offset > 0 {
             for galaxy in column.iter_mut() {
                 galaxy.x += offset;
@@ -59,10 +59,6 @@ fn part1(input_file: &PathBuf) -> Result<usize, AOCError> {
     }
 
     Ok(distance)
-}
-
-fn part2(_: &PathBuf) -> Result<usize, AOCError> {
-    Err(AOCError::from("Not implemented"))
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -97,8 +93,13 @@ mod tests {
 
     #[test]
     fn test_part1() {
-        let value = part1(&PathBuf::from("tests/input.txt")).unwrap();
+        let value = galaxy_distances(&PathBuf::from("tests/input.txt"), 2).unwrap();
         assert_eq!(value, 374);
     }
 
+    #[test]
+    fn test_100() {
+        let value = galaxy_distances(&PathBuf::from("tests/input.txt"), 100).unwrap();
+        assert_eq!(value, 8410);
+    }
 }
