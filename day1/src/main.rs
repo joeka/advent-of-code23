@@ -1,8 +1,10 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::OnceLock;
-use std::{fmt, env, process};
-use std::{path::Path, fs::File, io};
-use std::io::BufRead;
+use std::{env, process};
+
+use aoc::errors::AOCError;
+use aoc::{exit_with_error, get_input_buffer};
 
 static RADIX: u32 = 10;
 
@@ -29,31 +31,21 @@ fn main() {
         println!("Usage: {} INPUT_FILE", args[0]);
         process::exit(1);
     }
-    match sum_of_calibration_values(Path::new(&args[1])) {
+    match sum_of_calibration_values(&PathBuf::from(&args[1])) {
         Ok(sum) => println!("{sum}"),
-        Err(e) => {
-            eprintln!("{e}");
-            process::exit(1);
-        }
+        Err(e) => exit_with_error(e)
     }
 }
 
-fn sum_of_calibration_values(input_file: &Path) -> Result<u32, CalibrationError> {
+fn sum_of_calibration_values(input_file: &PathBuf) -> Result<u32, AOCError> {
     let mut sum: u32 = 0;
-    if let Ok(lines) = read_lines(input_file) {
-        for line in lines {
-            match line {
-                Ok(line) => sum += extract_number(line),
-                Err(_) => return Err(CalibrationError)
-            }
+    for line in get_input_buffer(input_file) {
+        match line {
+            Ok(line) => sum += extract_number(line),
+            Err(_) => return Err(AOCError::from("Could not read next line"))
         }
     }
     Ok(sum)
-}
-
-fn read_lines(path: &Path) -> io::Result<io::Lines<io::BufReader<File>>> {
-    let file = File::open(path)?;
-    Ok(io::BufReader::new(file).lines())
 }
 
 fn extract_number(line: String) -> u32 {
@@ -91,22 +83,13 @@ fn check_substring(line: &str, end: usize, length: usize) -> Option<u32> {
     }
 }
 
-#[derive(Debug, Clone)]
-struct CalibrationError;
-
-impl fmt::Display for CalibrationError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "calibration failed")
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_sum_of_calibration_values2() {
-        let result = sum_of_calibration_values(Path::new("./tests/input2.txt"));
+        let result = sum_of_calibration_values(&PathBuf::from("./tests/input2.txt"));
         assert_eq!(result.unwrap(), 281);
     }
 
@@ -117,14 +100,13 @@ mod tests {
 
     #[test]
     fn test_sum_of_calibration_values() {
-        let result = sum_of_calibration_values(Path::new("./tests/input.txt"));
+        let result = sum_of_calibration_values(&PathBuf::from("./tests/input.txt"));
         assert_eq!(result.unwrap(), 142);
     }
 
     #[test]
     fn test_read_lines() {
-        let file_contains_expected_line = read_lines(&Path::new("./tests/input.txt"))
-            .expect("file should contain lines")
+        let file_contains_expected_line = get_input_buffer(&PathBuf::from("./tests/input.txt"))
             .any(|line| line.unwrap() == "a1b2c3d4e5f");
         assert!(file_contains_expected_line);
     }

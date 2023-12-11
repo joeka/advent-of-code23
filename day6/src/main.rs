@@ -1,26 +1,14 @@
-use std::{env, path::Path, process, fs::File, io::{self, BufRead}, error};
-
-type Result<T> = std::result::Result<T, Box<dyn error::Error>>;
+use std::{path::PathBuf, io};
+use aoc::{get_args, get_input_buffer, Part};
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
-        exit_with_usage();
-    }
+    let options = get_args();
 
-    let input_path = Path::new(&args[1]);
-    if !input_path.exists() {
-        eprintln!("Input file does not exist: {}", input_path.display());
-        exit_with_usage();
-    }
-
-    match args.len() {
-        2 => println!("{}", part1(&input_path)),
-        3 => println!("{}", part2(&input_path)),
-        _ => exit_with_usage()
+    match options.part {
+        Part::One => part1(&options.input),
+        Part::Two => part2(&options.input)
     };
 }
-
 
 // v * (t -v) = d
 // v^2 - tv + d = 0
@@ -38,7 +26,7 @@ fn race(time: u64, distance: u64) -> u64 {
     upper - lower + 1
 }
 
-fn part1(input_path: &Path) -> u64 {
+fn part1(input_path: &PathBuf) -> u64 {
     let lines = get_input(input_path);
     let split_lines: Vec<Vec<u64>> = lines.iter()
         .map(|line| line.split_whitespace()
@@ -50,7 +38,7 @@ fn part1(input_path: &Path) -> u64 {
         .product()
 }
 
-fn part2(input_path: &Path) -> u64 {
+fn part2(input_path: &PathBuf) -> u64 {
     let lines = get_input(input_path);
     let inputs: Vec<u64> = lines.iter().map(|s| s.replace(' ', ""))
         .map(|s| s.parse::<u64>().unwrap())
@@ -58,24 +46,13 @@ fn part2(input_path: &Path) -> u64 {
     race(inputs[0], inputs[1])
 }
 
-fn get_input(input_path: &Path) -> Vec<String> {
-    read_lines(input_path).unwrap()
+fn get_input(input_path: &PathBuf) -> Vec<String> {
+    get_input_buffer(input_path)
         .take(2)
         .map(io::Result::unwrap)
         .map(|s| s.split_once(':').unwrap().1.to_owned())
         .collect()
 
-}
-
-fn exit_with_usage() {
-    println!("Usage: day6 INPUT_FILE");
-    println!("Part2: day6 INPUT_FILE part2");
-    process::exit(1);
-}
-
-fn read_lines(path: &Path) -> Result<io::Lines<io::BufReader<File>>> {
-    let file = File::open(path)?;
-    Ok(io::BufReader::new(file).lines())
 }
 
 #[cfg(test)]
@@ -84,13 +61,13 @@ mod tests {
 
     #[test]
     fn test_part2() {
-        let result = part2(Path::new("tests/input.txt"));
+        let result = part2(&PathBuf::from("tests/input.txt"));
         assert_eq!(result, 71503);
     }
 
     #[test]
     fn test_part1() {
-        let result = part1(Path::new("tests/input.txt"));
+        let result = part1(&PathBuf::from("tests/input.txt"));
         assert_eq!(result, 288);
     }
 }

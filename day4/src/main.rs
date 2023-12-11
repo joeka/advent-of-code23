@@ -1,35 +1,26 @@
 use std::collections::{HashSet, VecDeque};
 use std::io::BufRead;
-use std::{env, fmt, fs::File, io, path::Path, process};
+use std::path::PathBuf;
+use std::{fs::File, io, path::Path};
+
+use aoc::errors::AOCError;
+use aoc::{get_args, Part, exit_with_error, get_input_buffer};
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
-        exit_with_usage();
-    }
+    let options = get_args();
 
-    let input_path = Path::new(&args[1]);
-    if !input_path.exists() {
-        eprintln!("Input file does not exist: {}", input_path.display());
-        exit_with_usage();
-    }
-
-    let result = match args.len() {
-        2 => check_cards(&input_path),
-        3 => part2(&input_path),
-        _ => Err(CardError::from("Invalid number of arguments."))
+    let result: Result<u32, AOCError> = match options.part {
+        Part::One => check_cards(&options.input),
+        Part::Two => part2(&options.input)
     };
 
     match result {
-        Ok(sum) => println!("{sum}"),
-        Err(error) => {
-            eprintln!("{}", error);
-            exit_with_usage();
-        }
+        Ok(result) => println!("{result}"),
+        Err(error) => exit_with_error(error)
     }
 }
 
-fn part2(input_file: &Path) -> Result<u32, CardError> {
+fn part2(input_file: &Path) -> Result<u32, AOCError> {
     let mut sum: u32 = 0;
     let mut factors: VecDeque<u32> = VecDeque::new();
 
@@ -37,7 +28,7 @@ fn part2(input_file: &Path) -> Result<u32, CardError> {
         for line in lines {
             let line = match line {
                 Ok(line) => line,
-                Err(_) => return Err(CardError::from("Could not read line."))
+                Err(_) => return Err(AOCError::from("Could not read line."))
             };
 
             let content = line.split_once(':').unwrap().1;
@@ -75,65 +66,34 @@ fn part2(input_file: &Path) -> Result<u32, CardError> {
     Ok(sum)
 }
 
-fn check_cards(input_file: &Path) -> Result<u32, CardError> {
+fn check_cards(input_file: &PathBuf) -> Result<u32, AOCError> {
     let mut sum: u32 = 0;
-    if let Ok(lines) = read_lines(input_file) {
-        for line in lines {
-            let line = match line {
-                Ok(line) => line,
-                Err(_) => return Err(CardError::from("Could not read line."))
-            };
-            let content = line.split_once(':').unwrap().1;
-            let (winning, own) = content.split_once('|').unwrap();
-            let winning_numbers: HashSet<u32> = winning.split_whitespace()
-                .map(str::parse::<u32>)
-                .filter_map(Result::ok)
-                .collect();
-            let own_numbers: HashSet<u32> = own.split_whitespace()
-                .map(str::parse::<u32>)
-                .filter_map(Result::ok)
-                .collect();
-            let count = winning_numbers.intersection(&own_numbers).count();
-            if count > 0 {
-                sum += 1 << count - 1;
-            }
+    for line in get_input_buffer(input_file) {
+        let line = match line {
+            Ok(line) => line,
+            Err(_) => return Err(AOCError::from("Could not read line."))
+        };
+        let content = line.split_once(':').unwrap().1;
+        let (winning, own) = content.split_once('|').unwrap();
+        let winning_numbers: HashSet<u32> = winning.split_whitespace()
+            .map(str::parse::<u32>)
+            .filter_map(Result::ok)
+            .collect();
+        let own_numbers: HashSet<u32> = own.split_whitespace()
+            .map(str::parse::<u32>)
+            .filter_map(Result::ok)
+            .collect();
+        let count = winning_numbers.intersection(&own_numbers).count();
+        if count > 0 {
+            sum += 1 << count - 1;
         }
     }
     Ok(sum)
 }
 
-fn exit_with_usage() {
-    println!("Usage: day4 INPUT_FILE");
-    println!("Part2: day4 INPUT_FILE part2");
-    process::exit(1);
-}
-
 fn read_lines(path: &Path) -> io::Result<io::Lines<io::BufReader<File>>> {
     let file = File::open(path)?;
     Ok(io::BufReader::new(file).lines())
-}
-
-#[derive(Debug)]
-struct CardError {
-    message: String,
-}
-
-impl CardError {
-    fn new(message: String) -> Self {
-        Self { message: message }
-    }
-}
-
-impl From<&str> for CardError {
-    fn from(message: &str) -> Self {
-        Self::new(String::from(message))
-    }
-}
-
-impl fmt::Display for CardError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.message)
-    }
 }
 
 #[cfg(test)]
@@ -142,13 +102,13 @@ mod tests {
 
     #[test]
     fn test_part2() {
-        let sum = part2(Path::new("tests/input.txt")).unwrap();
+        let sum = part2(&PathBuf::from("tests/input.txt")).unwrap();
         assert_eq!(sum, 30);
     }
 
     #[test]
     fn test_check_cards() {
-        let sum = check_cards(Path::new("tests/input.txt")).unwrap();
+        let sum = check_cards(&PathBuf::from("tests/input.txt")).unwrap();
         assert_eq!(sum, 13);
     }
 }

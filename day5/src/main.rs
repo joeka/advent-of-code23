@@ -1,109 +1,98 @@
-use std::io::BufRead;
-use std::{env, fmt, fs::File, io, path::Path, process};
+use std::path::PathBuf;
+
+use aoc::errors::AOCError;
+use aoc::{Part, get_args, exit_with_error, get_input_buffer};
 
 static RADIX: u32 = 10;
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
-        exit_with_usage();
-    }
+    let options = get_args();
 
-    let input_path = Path::new(&args[1]);
-    if !input_path.exists() {
-        eprintln!("Input file does not exist: {}", input_path.display());
-        exit_with_usage();
-    }
-
-    let result = match args.len() {
-        2 => nearest_location(&input_path),
-        3 => part2(&input_path),
-        _ => Err(GardeningError::from("Invalid number of arguments."))
+    let result: Result<i64, AOCError> = match options.part {
+        Part::One => nearest_location(&options.input),
+        Part::Two => part2(&options.input)
     };
 
     match result {
-        Ok(sum) => println!("{sum}"),
-        Err(error) => {
-            eprintln!("{}", error);
-            exit_with_usage();
-        }
+        Ok(result) => println!("{result}"),
+        Err(error) => exit_with_error(error)
     }
 }
 
-fn nearest_location(input_file: &Path) -> Result<i64, GardeningError> {
+fn nearest_location(input_file: &PathBuf) -> Result<i64, AOCError> {
     let seeds: Vec<i64>;
     let mut operations: Vec<Vec<(i64, i64, i64)>> = Vec::new();
     let mut nearest: i64 = i64::MAX;
 
-    if let Ok(mut lines) = read_lines(input_file) {
-        let line = lines.next().unwrap();
+    let mut lines = get_input_buffer(input_file);
+    let line = lines.next().unwrap();
+    let line = match line {
+        Ok(line) => line,
+        Err(_) => return Err(AOCError::from("Could not read line.")),
+    };
+    seeds = line
+        .split_once(':')
+        .unwrap()
+        .1
+        .split_whitespace()
+        .map(str::parse::<i64>)
+        .filter_map(Result::ok)
+        .collect();
+
+    let mut current_operation: Vec<(i64, i64, i64)> = Vec::new();
+
+    for line in lines {
         let line = match line {
             Ok(line) => line,
-            Err(_) => return Err(GardeningError::from("Could not read line.")),
+            Err(_) => return Err(AOCError::from("Could not read line.")),
         };
-        seeds = line
-            .split_once(':')
-            .unwrap()
-            .1
-            .split_whitespace()
-            .map(str::parse::<i64>)
-            .filter_map(Result::ok)
-            .collect();
 
-        let mut current_operation: Vec<(i64, i64, i64)> = Vec::new();
-
-        for line in lines {
-            let line = match line {
-                Ok(line) => line,
-                Err(_) => return Err(GardeningError::from("Could not read line.")),
-            };
-
-            if !line.chars().next().is_some_and(|c| c.is_digit(RADIX)) {
-                if current_operation.len() > 0 {
-                    operations.push(current_operation);
-                    current_operation = Vec::new();
-                }
-            } else {
-                let parts: Vec<i64> = line
-                    .split_whitespace()
-                    .map(str::parse::<i64>)
-                    .filter_map(Result::ok)
-                    .collect();
-                let (destination, source, length) = (parts[0], parts[1], parts[2]);
-                let upper_bound = source + length;
-                let shift = destination - source;
-
-                current_operation.push((source, upper_bound, shift));
+        if !line.chars().next().is_some_and(|c| c.is_digit(RADIX)) {
+            if current_operation.len() > 0 {
+                operations.push(current_operation);
+                current_operation = Vec::new();
             }
+        } else {
+            let parts: Vec<i64> = line
+                .split_whitespace()
+                .map(str::parse::<i64>)
+                .filter_map(Result::ok)
+                .collect();
+            let (destination, source, length) = (parts[0], parts[1], parts[2]);
+            let upper_bound = source + length;
+            let shift = destination - source;
+
+            current_operation.push((source, upper_bound, shift));
         }
+    }
 
-        if current_operation.len() > 0 {
-            operations.push(current_operation);
+    if current_operation.len() > 0 {
+        operations.push(current_operation);
+    }
+
+    for seed in seeds {
+        let mut value = seed;
+        for operation in &operations {
+            value = map(value, &operation);
         }
-
-        for seed in seeds {
-            let mut value = seed;
-            for operation in &operations {
-                value = map(value, &operation);
-            }
-            if value < nearest {
-                nearest = value;
-            }
+        if value < nearest {
+            nearest = value;
         }
     }
     Ok(nearest)
 }
 
-fn part2(input_file: &Path) -> Result<i64, GardeningError> {
+fn part2(input_file: &PathBuf) -> Result<i64, AOCError> {
     let seeds: Vec<(i64, i64)>;
     let mut operations: Vec<Vec<(i64, i64, i64)>> = Vec::new();
     let mut nearest: i64 = i64::MAX;
 
-    if let Ok(mut lines) = read_lines(input_file) {
+    let mut lines = get_input_buffer(input_file);
+    {
         let line = lines.next().unwrap();
         let line = match line {
             Ok(line) => line,
-            Err(_) => return Err(GardeningError::from("Could not read line.")),
+            Err(_) => return Err(AOCError::from("Could not read line.")),
         };
         seeds = line
             .split_once(':')
@@ -122,7 +111,7 @@ fn part2(input_file: &Path) -> Result<i64, GardeningError> {
         for line in lines {
             let line = match line {
                 Ok(line) => line,
-                Err(_) => return Err(GardeningError::from("Could not read line.")),
+                Err(_) => return Err(AOCError::from("Could not read line.")),
             };
 
             if !line.chars().next().is_some_and(|c| c.is_digit(RADIX)) {
@@ -172,53 +161,19 @@ fn map(input: i64, operation: &Vec<(i64, i64, i64)>) -> i64 {
     input
 }
 
-fn exit_with_usage() {
-    println!("Usage: day5 INPUT_FILE");
-    println!("Part2: day5 INPUT_FILE part2");
-    process::exit(1);
-}
-
-fn read_lines(path: &Path) -> io::Result<io::Lines<io::BufReader<File>>> {
-    let file = File::open(path)?;
-    Ok(io::BufReader::new(file).lines())
-}
-
-#[derive(Debug)]
-struct GardeningError {
-    message: String,
-}
-
-impl GardeningError {
-    fn new(message: String) -> Self {
-        Self { message: message }
-    }
-}
-
-impl From<&str> for GardeningError {
-    fn from(message: &str) -> Self {
-        Self::new(String::from(message))
-    }
-}
-
-impl fmt::Display for GardeningError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.message)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_part2() {
-        let location = part2(Path::new("tests/input.txt")).unwrap();
+        let location = part2(&PathBuf::from("tests/input.txt")).unwrap();
         assert_eq!(location, 46);
     }
 
     #[test]
     fn test_nearest_location() {
-        let location = nearest_location(Path::new("tests/input.txt")).unwrap();
+        let location = nearest_location(&PathBuf::from("tests/input.txt")).unwrap();
         assert_eq!(location, 35);
     }
 }

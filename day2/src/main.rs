@@ -1,7 +1,9 @@
 use std::cmp::max;
 use std::io::BufRead;
 use std::str::FromStr;
-use std::{env, fmt, fs::File, io, path::Path, process};
+use std::{env, fs::File, io, path::Path, process};
+
+use aoc::errors::AOCError;
 
 #[derive(Debug)]
 struct Cubes {
@@ -17,7 +19,7 @@ impl Cubes {
 }
 
 impl FromStr for Cubes {
-    type Err = GameError;
+    type Err = AOCError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut cubes = Cubes {
@@ -27,16 +29,16 @@ impl FromStr for Cubes {
         };
         for cube_part in s.split(',').map(str::trim) {
             let (number, color) = cube_part.split_once(' ')
-                .ok_or(GameError::new(format!("Can't parse '{s}' into Cubes.")))?;
+                .ok_or(AOCError::new(format!("Can't parse '{s}' into Cubes.")))?;
             let value = match number.parse::<u32>() {
                 Ok(value) => value,
-                Err(_) => return Err(GameError::new(format!("'{}' is not a number.", number)))
+                Err(_) => return Err(AOCError::new(format!("'{}' is not a number.", number)))
             };
             match color {
                 "red" => cubes.red = value,
                 "green" => cubes.green = value,
                 "blue" => cubes.blue = value,
-                _ => return Err(GameError::new(format!("'{}' is not a valid cube color.", color)))
+                _ => return Err(AOCError::new(format!("'{}' is not a valid cube color.", color)))
             }
         }
         Ok(cubes)
@@ -70,13 +72,13 @@ impl Game {
 }
 
 impl FromStr for Game {
-    type Err = GameError;
+    type Err = AOCError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (game_id_part, draws_part) = s.split_once(':')
-            .ok_or(GameError::new(format!("Could not parse: {s}")))?;
+            .ok_or(AOCError::new(format!("Could not parse: {s}")))?;
         let game_id = parse_game_id(game_id_part)?;
-        let draws: Result<Vec<Cubes>, GameError> = draws_part.split(';')
+        let draws: Result<Vec<Cubes>, AOCError> = draws_part.split(';')
             .map(Cubes::from_str)
             .collect();
         match draws {
@@ -97,7 +99,7 @@ fn main() {
     let result = match args.len() {
         2 => part2(input_path),
         5 => part1(input_path, &args),
-        _ => Err(GameError::from("Invalid number of arguments"))
+        _ => Err(AOCError::from("Invalid number of arguments"))
     };
     match result {
         Ok(sum) => println!("{sum}"),
@@ -108,11 +110,11 @@ fn main() {
     }
 }
 
-fn part2(input_file: &Path) -> Result<u32, GameError> {
+fn part2(input_file: &Path) -> Result<u32, AOCError> {
     sum_of_minimum_power(input_file)
 }
 
-fn part1(input_file: &Path, args: &Vec<String>)  -> Result<u32, GameError> {
+fn part1(input_file: &Path, args: &Vec<String>)  -> Result<u32, AOCError> {
     let mut bag = Cubes { red: 0, green: 0, blue: 0};
     match args[2].parse::<u32>() {
         Ok(red) => bag.red = red,
@@ -135,7 +137,7 @@ fn exit_with_usage() {
     process::exit(1);
 }
 
-fn sum_of_minimum_power(input_file: &Path) -> Result<u32, GameError> {
+fn sum_of_minimum_power(input_file: &Path) -> Result<u32, AOCError> {
     let mut sum: u32 = 0;
     if let Ok(lines) = read_lines(input_file) {
         for line in lines {
@@ -146,7 +148,7 @@ fn sum_of_minimum_power(input_file: &Path) -> Result<u32, GameError> {
     Ok(sum)
 }
 
-fn sum_of_possible_games(input_file: &Path, bag: &Cubes) -> Result<u32, GameError> {
+fn sum_of_possible_games(input_file: &Path, bag: &Cubes) -> Result<u32, AOCError> {
     let mut sum: u32 = 0;
     if let Ok(lines) = read_lines(input_file) {
         for line in lines {
@@ -159,51 +161,28 @@ fn sum_of_possible_games(input_file: &Path, bag: &Cubes) -> Result<u32, GameErro
     Ok(sum)
 }
 
-fn game_from_line(line: Result<String, io::Error>) -> Result<Game, GameError> {
+fn game_from_line(line: Result<String, io::Error>) -> Result<Game, AOCError> {
     let line = match line {
         Ok(line) => line,
-        Err(_) => return Err(GameError::from("Could not read the input file!")),
+        Err(_) => return Err(AOCError::from("Could not read the input file!")),
     };
     Game::from_str(&line)
 }
 
-fn parse_game_id(part: &str) -> Result<u32, GameError> {
+fn parse_game_id(part: &str) -> Result<u32, AOCError> {
     let id_part = match part.split_once(' ') {
         Some(part) => part.1,
-        None => return Err(GameError::new(format!("Can't parse game id from '{part}'"))),
+        None => return Err(AOCError::new(format!("Can't parse game id from '{part}'"))),
     };
     match id_part.parse::<u32>() {
         Ok(number) => Ok(number),
-        Err(_) => Err(GameError::new(format!("Can't parse game id: '{id_part}' is not a number."))),
+        Err(_) => Err(AOCError::new(format!("Can't parse game id: '{id_part}' is not a number."))),
     }
 }
 
 fn read_lines(path: &Path) -> io::Result<io::Lines<io::BufReader<File>>> {
     let file = File::open(path)?;
     Ok(io::BufReader::new(file).lines())
-}
-
-#[derive(Debug)]
-struct GameError {
-    message: String
-}
-
-impl GameError {
-    fn new(message: String) -> Self {
-        Self { message: message }
-    }
-}
-
-impl From<&str> for GameError {
-    fn from(message: &str) -> Self {
-        Self::new(String::from(message))
-    }
-}
-
-impl fmt::Display for GameError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.message)
-    }
 }
 
 #[cfg(test)]

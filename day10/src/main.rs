@@ -1,30 +1,18 @@
-use std::io::BufRead;
-use std::{env, fmt, fs::File, io, path::Path, process};
+use std::path::PathBuf;
+use aoc::errors::AOCError;
+use aoc::{get_args, Part, exit_with_error, get_input_buffer};
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
-        exit_with_usage();
-    }
+    let options = get_args();
 
-    let input_path = Path::new(&args[1]);
-    if !input_path.exists() {
-        eprintln!("Input file does not exist: {}", input_path.display());
-        exit_with_usage();
-    }
-
-    let result: Result<u64, NavigationError> = match args.len() {
-        2 => part1(&input_path),
-        3 => part2(&input_path),
-        _ => Err(NavigationError::from("Invalid number of arguments."))
+    let result: Result<u64, AOCError> = match options.part {
+        Part::One => part1(&options.input),
+        Part::Two => part2(&options.input)
     };
 
     match result {
         Ok(result) => println!("{result}"),
-        Err(error) => {
-            eprintln!("{}", error);
-            exit_with_usage();
-        }
+        Err(error) => exit_with_error(error)
     }
 }
 
@@ -32,7 +20,7 @@ type Coordinate = (usize, usize);
 type Node = (Coordinate, Coordinate, char);
 
 
-fn part2(input_file: &Path) -> Result<u64, NavigationError> {
+fn part2(input_file: &PathBuf) -> Result<u64, AOCError> {
     let (
         start,
         start_node,
@@ -40,7 +28,7 @@ fn part2(input_file: &Path) -> Result<u64, NavigationError> {
     Ok(calculate_area_in_loop((start.0, start.1, start_node.2), &start_node.0, &grid))
 }
 
-fn part1(input_file: &Path) -> Result<u64, NavigationError> {
+fn part1(input_file: &PathBuf) -> Result<u64, AOCError> {
     let (
         start,
         start_node,
@@ -49,22 +37,20 @@ fn part1(input_file: &Path) -> Result<u64, NavigationError> {
     Ok(count / 2)
 }
 
-fn parse_grid(input_file: &Path) -> (Coordinate, Node, Vec<Vec<Option<Node>>>) {
+fn parse_grid(input_file: &PathBuf) -> (Coordinate, Node, Vec<Vec<Option<Node>>>) {
     let mut start: Coordinate = (0, 0);
     let mut grid: Vec<Vec<Option<Node>>> = Vec::new();
 
-    if let Ok(lines) = read_lines(input_file) {
-        for (y, line) in lines.enumerate() {
-            let mut current_line: Vec<Option<Node>> = Vec::new();
-            for (x, c) in line.unwrap().chars().enumerate() {
-                let node = create_node(&c, x, y);
-                if c == 'S' {
-                    start = (x, y);
-                }
-                current_line.push(node);
+    for (y, line) in get_input_buffer(input_file).enumerate() {
+        let mut current_line: Vec<Option<Node>> = Vec::new();
+        for (x, c) in line.unwrap().chars().enumerate() {
+            let node = create_node(&c, x, y);
+            if c == 'S' {
+                start = (x, y);
             }
-            grid.push(current_line);
+            current_line.push(node);
         }
+        grid.push(current_line);
     }
     let starting_directions = find_starting_directions(&grid, &start);
     let start_node = define_start_node(&start, starting_directions);
@@ -236,65 +222,31 @@ fn create_node(c: &char, x: usize, y: usize) -> Option<Node> {
     }
 }
 
-fn exit_with_usage() {
-    println!("Usage: day10 INPUT_FILE");
-    println!("Part2: day10 INPUT_FILE part2");
-    process::exit(1);
-}
-
-fn read_lines(path: &Path) -> io::Result<io::Lines<io::BufReader<File>>> {
-    let file = File::open(path)?;
-    Ok(io::BufReader::new(file).lines())
-}
-
-#[derive(Debug)]
-struct NavigationError {
-    message: String,
-}
-
-impl NavigationError {
-    fn new(message: String) -> Self {
-        Self { message: message }
-    }
-}
-
-impl From<&str> for NavigationError {
-    fn from(message: &str) -> Self {
-        Self::new(String::from(message))
-    }
-}
-
-impl fmt::Display for NavigationError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.message)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_part2_1() {
-        let area = part2(Path::new("tests/part2_1.txt")).unwrap();
+        let area = part2(&PathBuf::from("tests/part2_1.txt")).unwrap();
         assert_eq!(area, 4);
     }
 
     #[test]
     fn test_part2_2() {
-        let area = part2(Path::new("tests/part2_2.txt")).unwrap();
+        let area = part2(&PathBuf::from("tests/part2_2.txt")).unwrap();
         assert_eq!(area, 8);
     }
 
     #[test]
     fn test_example1() {
-        let distance = part1(Path::new("tests/example1.txt")).unwrap();
+        let distance = part1(&PathBuf::from("tests/example1.txt")).unwrap();
         assert_eq!(distance, 4);
     }
 
     #[test]
     fn test_example2() {
-        let distance = part1(Path::new("tests/example2.txt")).unwrap();
+        let distance = part1(&PathBuf::from("tests/example2.txt")).unwrap();
         assert_eq!(distance, 8);
     }
 }

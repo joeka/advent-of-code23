@@ -1,5 +1,7 @@
-use std::io::BufRead;
-use std::{env, fmt, fs::File, io, path::Path, process};
+use std::path::PathBuf;
+
+use aoc::errors::AOCError;
+use aoc::{get_args, Part, exit_with_error, get_input_buffer};
 
 static RADIX: u32 = 10;
 
@@ -112,42 +114,29 @@ fn get_hand_type(cards: &Vec<char>, with_joker: bool) -> HandType {
 }
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
-        exit_with_usage();
-    }
+    let options = get_args();
 
-    let input_path = Path::new(&args[1]);
-    if !input_path.exists() {
-        eprintln!("Input file does not exist: {}", input_path.display());
-        exit_with_usage();
-    }
-
-    let result: Result<u64, CamelError> = match args.len() {
-        2 => total_winnings(&input_path, false),
-        3 => total_winnings(&input_path, true),
-        _ => Err(CamelError::from("Invalid number of arguments."))
+    let result: Result<u64, AOCError> = match options.part {
+        Part::One => total_winnings(&options.input, false),
+        Part::Two => total_winnings(&options.input, true)
     };
 
     match result {
-        Ok(sum) => println!("{sum}"),
-        Err(error) => {
-            eprintln!("{}", error);
-            exit_with_usage();
-        }
+        Ok(result) => println!("{result}"),
+        Err(error) => exit_with_error(error)
     }
 }
 
-fn total_winnings(input_file: &Path, with_joker: bool) -> Result<u64, CamelError> {
+fn total_winnings(input_file: &PathBuf, with_joker: bool) -> Result<u64, AOCError> {
     let mut hands: Vec<Hand> = Vec::new();
-    if let Ok(lines) = read_lines(input_file) {
-        for line in lines {
-            if let Ok(line) = line {
-                let (cards, bet) = line.split_once(' ').unwrap();
-                hands.push(Hand::new(cards, bet.parse::<u64>().unwrap(), with_joker))
-            }
-        } 
-    }
+    let lines = get_input_buffer(input_file);
+    for line in lines {
+        if let Ok(line) = line {
+            let (cards, bet) = line.split_once(' ').unwrap();
+            hands.push(Hand::new(cards, bet.parse::<u64>().unwrap(), with_joker))
+        }
+    } 
+
     hands.sort_by_key(|hand| hand.value);
 
     let mut result: u64 = 0;
@@ -155,40 +144,6 @@ fn total_winnings(input_file: &Path, with_joker: bool) -> Result<u64, CamelError
         result += (i as u64 + 1) * hand.bet;
     }
     Ok(result)
-}
-
-fn exit_with_usage() {
-    println!("Usage: day7 INPUT_FILE");
-    println!("Part2: day7 INPUT_FILE part2");
-    process::exit(1);
-}
-
-fn read_lines(path: &Path) -> io::Result<io::Lines<io::BufReader<File>>> {
-    let file = File::open(path)?;
-    Ok(io::BufReader::new(file).lines())
-}
-
-#[derive(Debug)]
-struct CamelError {
-    message: String,
-}
-
-impl CamelError {
-    fn new(message: String) -> Self {
-        Self { message: message }
-    }
-}
-
-impl From<&str> for CamelError {
-    fn from(message: &str) -> Self {
-        Self::new(String::from(message))
-    }
-}
-
-impl fmt::Display for CamelError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.message)
-    }
 }
 
 #[cfg(test)]
@@ -211,7 +166,7 @@ mod tests {
 
     #[test]
     fn test_total_winnings_part2() {
-        let location = total_winnings(Path::new("tests/input.txt"), true).unwrap();
+        let location = total_winnings(&PathBuf::from("tests/input.txt"), true).unwrap();
         assert_eq!(location, 5905);
     }
 
@@ -228,7 +183,7 @@ mod tests {
 
     #[test]
     fn test_total_winnings() {
-        let location = total_winnings(Path::new("tests/input.txt"), false).unwrap();
+        let location = total_winnings(&PathBuf::from("tests/input.txt"), false).unwrap();
         assert_eq!(location, 6440);
     }
 }
